@@ -1,10 +1,10 @@
 package team.uno.marblegame;
 
-import team.uno.marblegame.util.SystemUiHider;
-
-import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -13,218 +13,178 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
+import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.util.DisplayMetrics;
 import android.view.Display;
-import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Toast;
 
-/**
- * An example full-screen activity that shows and hides the system UI (i.e.
- * status bar and navigation/system bar) with user interaction.
- *
- * @see SystemUiHider
- */
 public class AccelerometerPlay extends Activity {
-    /**
-     * Whether or not the system UI should be auto-hidden after
-     * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
-     */
-    private static final boolean AUTO_HIDE = true;
 
-    /**
-     * If {@link #AUTO_HIDE} is set, the number of milliseconds to wait after
-     * user interaction before hiding the system UI.
-     */
-    private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
+	//@Override
+	//public boolean onCreateOptionsMenu(Menu menu) {
+		// Inflate the menu; this adds items to the action bar if it is present.
+		//getMenuInflater().inflate(R.menu.accelerometer_play, menu);
+		//return true;
+	//}
+	
+	private SimulationView m_SimulationView;
+    private SensorManager m_SensorManager;
+    private PowerManager m_PowerManager;
+    private WindowManager m_WindowManager;
+    private Display m_Display;
+    private WakeLock m_WakeLock;
+    private MazeGenerator m_Maze;
+    private final int m_MazeHeight = 15;
+    private final int m_MazeWidth = 20;
 
-    /**
-     * If set, will toggle the system UI visibility upon interaction. Otherwise,
-     * will show the system UI visibility upon interaction.
-     */
-    private static final boolean TOGGLE_ON_CLICK = true;
+	private TimingService m_Timer;
+	private boolean m_IsBound = false;
 
-    /**
-     * The flags to pass to {@link SystemUiHider#getInstance}.
-     */
-    private static final int HIDER_FLAGS = SystemUiHider.FLAG_HIDE_NAVIGATION;
-
-    /**
-     * The instance of the {@link SystemUiHider} for this activity.
-     */
-    private SystemUiHider mSystemUiHider;
-    
-    private SimulationView mSimulationView;
-    private SensorManager mSensorManager;
-    private PowerManager mPowerManager;
-    private WindowManager mWindowManager;
-    private Display mDisplay;
-    private WakeLock mWakeLock;
-
-	@Override
-    protected void onCreate(Bundle savedInstanceState) {
+    /** Called when the activity is first created. */
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        //setContentView(R.layout.activity_accelerometer_play);
-
-        final View controlsView = findViewById(R.id.fullscreen_content_controls);
-        final View contentView = findViewById(R.id.fullscreen_content);
-
-        // Set up an instance of SystemUiHider to control the system UI for
-        // this activity.
-        mSystemUiHider = SystemUiHider.getInstance(this, contentView, HIDER_FLAGS);
-        mSystemUiHider.setup();
-        mSystemUiHider
-                .setOnVisibilityChangeListener(new SystemUiHider.OnVisibilityChangeListener() {
-                    // Cached values.
-                    int mControlsHeight;
-                    int mShortAnimTime;
-
-                    @Override
-                    @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR2)
-                    public void onVisibilityChange(boolean visible) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR2) {
-                            // If the ViewPropertyAnimator API is available
-                            // (Honeycomb MR2 and later), use it to animate the
-                            // in-layout UI controls at the bottom of the
-                            // screen.
-                            if (mControlsHeight == 0) {
-                                mControlsHeight = controlsView.getHeight();
-                            }
-                            if (mShortAnimTime == 0) {
-                                mShortAnimTime = getResources().getInteger(
-                                        android.R.integer.config_shortAnimTime);
-                            }
-                            controlsView.animate()
-                                    .translationY(visible ? 0 : mControlsHeight)
-                                    .setDuration(mShortAnimTime);
-                        } else {
-                            // If the ViewPropertyAnimator APIs aren't
-                            // available, simply show or hide the in-layout UI
-                            // controls.
-                            controlsView.setVisibility(visible ? View.VISIBLE : View.GONE);
-                        }
-
-                        if (visible && AUTO_HIDE) {
-                            // Schedule a hide().
-                            delayedHide(AUTO_HIDE_DELAY_MILLIS);
-                        }
-                    }
-                });
-
-        // Set up the user interaction to manually show or hide the system UI.
-        contentView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (TOGGLE_ON_CLICK) {
-                    mSystemUiHider.toggle();
-                } else {
-                    mSystemUiHider.show();
-                }
-            }
-        });
-
-        // Upon interacting with UI controls, delay any scheduled hide()
-        // operations to prevent the jarring behavior of controls going away
-        // while interacting with the UI.
+        doBindService();
         
-        //findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
+        m_Maze = new MazeGenerator(m_MazeHeight, m_MazeWidth);
         
         // Get an instance of the SensorManager
-        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        m_SensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 
         // Get an instance of the PowerManager
-        mPowerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        m_PowerManager = (PowerManager) getSystemService(POWER_SERVICE);
 
         // Get an instance of the WindowManager
-        mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        mDisplay = mWindowManager.getDefaultDisplay();
+        m_WindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        m_Display = m_WindowManager.getDefaultDisplay();
 
         // Create a bright wake lock
-        mWakeLock = mPowerManager.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, getClass()
+        m_WakeLock = m_PowerManager.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, getClass()
                 .getName());
 
         // instantiate our simulation view and set it as the activity's content
-        mSimulationView = new SimulationView(this);
-        setContentView(mSimulationView);
+        m_SimulationView = new SimulationView(this);
+        setContentView(m_SimulationView);
     }
 
     @Override
-    protected void onPostCreate(Bundle savedInstanceState) {
-        super.onPostCreate(savedInstanceState);
+    protected void onResume() {
+        super.onResume();
+        /*
+         * when the activity is resumed, we acquire a wake-lock so that the
+         * screen stays on, since the user will likely not be fiddling with the
+         * screen or buttons.
+         */
+        m_WakeLock.acquire();
 
-        // Trigger the initial hide() shortly after the activity has been
-        // created, to briefly hint to the user that UI controls
-        // are available.
-        delayedHide(100);
+        // Start the simulation
+        m_SimulationView.startSimulation();
+        //Binds the app to the service.
+        Intent myIntent = new Intent(AccelerometerPlay.this, TimingService.class);
+        startService(myIntent);
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        /*
+         * When the activity is paused, we make sure to stop the simulation,
+         * release our sensor resources and wake locks
+         */
 
-    /**
-     * Touch listener to use for in-layout UI controls to delay hiding the
-     * system UI. This is to prevent the jarring behavior of controls going away
-     * while interacting with activity UI.
-     */
-    View.OnTouchListener mDelayHideTouchListener = new View.OnTouchListener() {
-        @Override
-        public boolean onTouch(View view, MotionEvent motionEvent) {
-            if (AUTO_HIDE) {
-                delayedHide(AUTO_HIDE_DELAY_MILLIS);
-            }
-            return false;
-        }
-    };
+        // Stop the simulation
+        m_SimulationView.stopSimulation();
 
-    Handler mHideHandler = new Handler();
-    Runnable mHideRunnable = new Runnable() {
-        @Override
-        public void run() {
-            mSystemUiHider.hide();
-        }
-    };
-
-    /**
-     * Schedules a call to hide() in [delay] milliseconds, canceling any
-     * previously scheduled calls.
-     */
-    private void delayedHide(int delayMillis) {
-        mHideHandler.removeCallbacks(mHideRunnable);
-        mHideHandler.postDelayed(mHideRunnable, delayMillis);
+        Intent myIntent = new Intent(AccelerometerPlay.this, TimingService.class);
+        stopService(myIntent);
+        doUnbindService();
+        // and release our wake-lock
+        m_WakeLock.release();
     }
+
+    void doBindService() {
+	    // Establish a connection with the service.  We use an explicit
+	    // class name because we want a specific service implementation that
+	    // we know will be running in our own process (and thus won't be
+	    // supporting component replacement by other applications).
+	    bindService(new Intent(this, 
+	            TimingService.class), m_Connection, this.BIND_AUTO_CREATE);
+	    m_IsBound = true;
+	}
+    
+    void doUnbindService() {
+	    if (m_IsBound) {
+	        // Detach our existing connection.
+	        unbindService(m_Connection);
+	        m_IsBound = false;
+	    }
+	}
+    
+    private ServiceConnection m_Connection = new ServiceConnection() {
+	    public void onServiceConnected(ComponentName className, IBinder service) {
+	        // This is called when the connection with the service has been
+	        // established, giving us the service object we can use to
+	        // interact with the service.  Because we have bound to a explicit
+	        // service that we know is running in our own process, we can
+	        // cast its IBinder to a concrete class and directly access it.
+	        m_Timer = ((TimingService.TimingBinder)service).getService();
+
+	        // Tell the user about this for our demo.
+	        Toast.makeText(AccelerometerPlay.this, R.string.app_name,
+	                Toast.LENGTH_SHORT).show();
+	    }
+
+	    public void onServiceDisconnected(ComponentName className) {
+	        // This is called when the connection with the service has been
+	        // unexpectedly disconnected -- that is, its process crashed.
+	        // Because it is running in our same process, we should never
+	        // see this happen.
+	        m_Timer = null;
+	        Toast.makeText(AccelerometerPlay.this, R.string.app_name,
+	                Toast.LENGTH_SHORT).show();
+	        
+	    }
+	};
     
     class SimulationView extends View implements SensorEventListener {
         // diameter of the balls in meters
-        private static final float sBallDiameter = 0.004f;
-        private static final float sBallDiameter2 = sBallDiameter * sBallDiameter;
+        private static final float s_BallDiameter = 0.004f;
+        private static final float s_BallDiameter2 = s_BallDiameter * s_BallDiameter;
 
         // friction of the virtual table and air
-        private static final float sFriction = 0.1f;
+        private static final float s_Friction = 0.1f;
 
-        private Sensor mAccelerometer;
-        private long mLastT;
-        private float mLastDeltaT;
+        private Sensor m_Accelerometer;
+        private long m_LastT;
+        private float m_LastDeltaT;
 
-        private float mXDpi;
-        private float mYDpi;
-        private float mMetersToPixelsX;
-        private float mMetersToPixelsY;
-        private Bitmap mBitmap;
-        private Bitmap mWood;
-        private float mXOrigin;
-        private float mYOrigin;
-        private float mSensorX;
-        private float mSensorY;
-        private long mSensorTimeStamp;
-        private long mCpuTimeStamp;
-        private float mHorizontalBound;
-        private float mVerticalBound;
-        private final ParticleSystem mParticleSystem = new ParticleSystem();
+        private float m_XDpi;
+        private float m_YDpi;
+        private float m_Height;
+        private float m_Width;
+        private float m_MetersToPixelsX;
+        private float m_MetersToPixelsY;
+        private Bitmap m_Bitmap;
+        private Bitmap m_Wood;
+        private float m_XOrigin;
+        private float m_YOrigin;
+        private float m_SensorX;
+        private float m_SensorY;
+        private long m_SensorTimeStamp;
+        private long m_CpuTimeStamp;
+        private float m_HorizontalBound;
+        private float m_VerticalBound;
+        private float m_HorizontalUpperBound;
+        private float m_HorizontalLowerBound;
+        private float m_VerticalUpperBound;
+        private float m_VerticalLowerBound;
+        private final ParticleSystem m_ParticleSystem = new ParticleSystem();
 
         /*
          * Each of our particle holds its previous and current position, its
@@ -232,19 +192,19 @@ public class AccelerometerPlay extends Activity {
          * coefficient.
          */
         class Particle {
-            private float mPosX;
-            private float mPosY;
-            private float mAccelX;
-            private float mAccelY;
-            private float mLastPosX;
-            private float mLastPosY;
-            private float mOneMinusFriction;
+            private float m_PosX;
+            private float m_PosY;
+            private float m_AccelX;
+            private float m_AccelY;
+            private float m_LastPosX;
+            private float m_LastPosY;
+            private float m_OneMinusFriction;
 
             Particle() {
                 // make each particle a bit different by randomizing its
                 // coefficient of friction
                 final float r = ((float) Math.random() - 0.5f) * 0.2f;
-                mOneMinusFriction = 1.0f - sFriction + r;
+                m_OneMinusFriction = 1.0f - s_Friction + r;
             }
 
             public void computePhysics(float sx, float sy, float dT, float dTC) {
@@ -272,16 +232,16 @@ public class AccelerometerPlay extends Activity {
                  * (1-f) * (x(t) - x(t-Æt)) * (Æt/Æt_prev) + a(t)Ætö2
                  */
                 final float dTdT = dT * dT;
-                final float x = mPosX + mOneMinusFriction * dTC * (mPosX - mLastPosX) + mAccelX
+                final float x = m_PosX + m_OneMinusFriction * dTC * (m_PosX - m_LastPosX) + m_AccelX
                         * dTdT;
-                final float y = mPosY + mOneMinusFriction * dTC * (mPosY - mLastPosY) + mAccelY
+                final float y = m_PosY + m_OneMinusFriction * dTC * (m_PosY - m_LastPosY) + m_AccelY
                         * dTdT;
-                mLastPosX = mPosX;
-                mLastPosY = mPosY;
-                mPosX = x;
-                mPosY = y;
-                mAccelX = ax;
-                mAccelY = ay;
+                m_LastPosX = m_PosX;
+                m_LastPosY = m_PosY;
+                m_PosX = x;
+                m_PosY = y;
+                m_AccelX = ax;
+                m_AccelY = ay;
             }
 
             /*
@@ -291,19 +251,21 @@ public class AccelerometerPlay extends Activity {
              * satisfied.
              */
             public void resolveCollisionWithBounds() {
-                final float xmax = mHorizontalBound;
-                final float ymax = mVerticalBound;
-                final float x = mPosX;
-                final float y = mPosY;
+                final float xmax = m_HorizontalUpperBound;
+                final float xmin = m_HorizontalLowerBound;
+                final float ymax = m_VerticalUpperBound;
+                final float ymin = m_VerticalLowerBound;
+                final float x = m_PosX;
+                final float y = m_PosY;
                 if (x > xmax) {
-                    mPosX = xmax;
-                } else if (x < -xmax) {
-                    mPosX = -xmax;
+                    m_PosX = xmax;
+                } else if (x < xmin) {
+                    m_PosX = xmin;
                 }
                 if (y > ymax) {
-                    mPosY = ymax;
-                } else if (y < -ymax) {
-                    mPosY = -ymax;
+                    m_PosY = ymax;
+                } else if (y < ymin) {
+                    m_PosY = ymin;
                 }
             }
         }
@@ -312,8 +274,8 @@ public class AccelerometerPlay extends Activity {
          * A particle system is just a collection of particles
          */
         class ParticleSystem {
-            static final int NUM_PARTICLES = 15;
-            private Particle mBalls[] = new Particle[NUM_PARTICLES];
+            static final int NUM_PARTICLES = 1;
+            private Particle mBalls[] = new Particle[NUM_PARTICLES];                        
 
             ParticleSystem() {
                 /*
@@ -330,19 +292,29 @@ public class AccelerometerPlay extends Activity {
              */
             private void updatePositions(float sx, float sy, long timestamp) {
                 final long t = timestamp;
-                if (mLastT != 0) {
-                    final float dT = (float) (t - mLastT) * (1.0f / 1000000000.0f);
-                    if (mLastDeltaT != 0) {
-                        final float dTC = dT / mLastDeltaT;
+                if (m_LastT != 0) {
+                    final float dT = (float) (t - m_LastT) * (1.0f / 1000000000.0f);
+                    if (m_LastDeltaT != 0) {
+                        final float dTC = dT / m_LastDeltaT;
                         final int count = mBalls.length;
                         for (int i = 0; i < count; i++) {
                             Particle ball = mBalls[i];
                             ball.computePhysics(sx, sy, dT, dTC);
                         }
                     }
-                    mLastDeltaT = dT;
+                    m_LastDeltaT = dT;
                 }
-                mLastT = t;
+                m_LastT = t;
+            }
+            
+            /*
+             * Computes the boundaries for the current position of the ball.
+             */
+            private void updateBoundaries(int row, int col)
+            {
+            	float height = 0.90f * (m_Height / (float) m_MazeHeight);
+                float width = 0.98f * (m_Width / (float) m_MazeWidth);
+            	
             }
 
             /*
@@ -371,11 +343,11 @@ public class AccelerometerPlay extends Activity {
                         Particle curr = mBalls[i];
                         for (int j = i + 1; j < count; j++) {
                             Particle ball = mBalls[j];
-                            float dx = ball.mPosX - curr.mPosX;
-                            float dy = ball.mPosY - curr.mPosY;
+                            float dx = ball.m_PosX - curr.m_PosX;
+                            float dy = ball.m_PosY - curr.m_PosY;
                             float dd = dx * dx + dy * dy;
                             // Check for collisions
-                            if (dd <= sBallDiameter2) {
+                            if (dd <= s_BallDiameter2) {
                                 /*
                                  * add a little bit of entropy, after nothing is
                                  * perfect in the universe.
@@ -385,14 +357,17 @@ public class AccelerometerPlay extends Activity {
                                 dd = dx * dx + dy * dy;
                                 // simulate the spring
                                 final float d = (float) Math.sqrt(dd);
-                                final float c = (0.5f * (sBallDiameter - d)) / d;
-                                curr.mPosX -= dx * c;
-                                curr.mPosY -= dy * c;
-                                ball.mPosX += dx * c;
-                                ball.mPosY += dy * c;
+                                final float c = (0.5f * (s_BallDiameter - d)) / d;
+                                curr.m_PosX -= dx * c;
+                                curr.m_PosY -= dy * c;
+                                ball.m_PosX += dx * c;
+                                ball.m_PosY += dy * c;
                                 more = true;
                             }
                         }
+                        //int row = (m_MazeHeight / 2) - curr.m_PosY;
+                        //int col = (m_MazeWidth / 2) - curr.m_PosX;
+                        //updateBoundaries(row, col);
                         /*
                          * Finally make sure the particle doesn't intersects
                          * with the walls.
@@ -407,11 +382,11 @@ public class AccelerometerPlay extends Activity {
             }
 
             public float getPosX(int i) {
-                return mBalls[i].mPosX;
+                return mBalls[i].m_PosX;
             }
 
             public float getPosY(int i) {
-                return mBalls[i].mPosY;
+                return mBalls[i].m_PosY;
             }
         }
 
@@ -423,44 +398,50 @@ public class AccelerometerPlay extends Activity {
              * of the acceleration. As an added benefit, we use less power and
              * CPU resources.
              */
-            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_UI);
+            m_SensorManager.registerListener(this, m_Accelerometer, SensorManager.SENSOR_DELAY_UI);
         }
 
         public void stopSimulation() {
-            mSensorManager.unregisterListener(this);
+            m_SensorManager.unregisterListener(this);
         }
 
         public SimulationView(Context context) {
             super(context);
-            mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            m_Accelerometer = m_SensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 
             DisplayMetrics metrics = new DisplayMetrics();
             getWindowManager().getDefaultDisplay().getMetrics(metrics);
-            mXDpi = metrics.xdpi;
-            mYDpi = metrics.ydpi;
-            mMetersToPixelsX = mXDpi / 0.0254f;
-            mMetersToPixelsY = mYDpi / 0.0254f;
+            m_XDpi = metrics.xdpi;
+            m_YDpi = metrics.ydpi;
+            m_MetersToPixelsX = m_XDpi / 0.0254f;
+            m_MetersToPixelsY = m_YDpi / 0.0254f;
+            m_Height = metrics.heightPixels;
+            m_Width = metrics.widthPixels;
 
             // rescale the ball so it's about 0.5 cm on screen
             Bitmap ball = BitmapFactory.decodeResource(getResources(), R.drawable.ball);
-            final int dstWidth = (int) (sBallDiameter * mMetersToPixelsX + 0.5f);
-            final int dstHeight = (int) (sBallDiameter * mMetersToPixelsY + 0.5f);
-            mBitmap = Bitmap.createScaledBitmap(ball, dstWidth, dstHeight, true);
+            final int dstWidth = (int) (s_BallDiameter * m_MetersToPixelsX + 0.5f);
+            final int dstHeight = (int) (s_BallDiameter * m_MetersToPixelsY + 0.5f);
+            m_Bitmap = Bitmap.createScaledBitmap(ball, dstWidth, dstHeight, true);
 
             Options opts = new Options();
             opts.inDither = true;
             opts.inPreferredConfig = Bitmap.Config.RGB_565;
-            mWood = BitmapFactory.decodeResource(getResources(), R.drawable.wood, opts);
+            m_Wood = BitmapFactory.decodeResource(getResources(), R.drawable.wood, opts);
         }
 
         @Override
         protected void onSizeChanged(int w, int h, int oldw, int oldh) {
             // compute the origin of the screen relative to the origin of
             // the bitmap
-            mXOrigin = (w - mBitmap.getWidth()) * 0.5f;
-            mYOrigin = (h - mBitmap.getHeight()) * 0.5f;
-            mHorizontalBound = ((w / mMetersToPixelsX - sBallDiameter) * 0.5f);
-            mVerticalBound = ((h / mMetersToPixelsY - sBallDiameter) * 0.5f);
+            m_XOrigin = (w - m_Bitmap.getWidth()) * 0.5f;
+            m_YOrigin = (h - m_Bitmap.getHeight()) * 0.5f;
+            m_HorizontalBound = ((w / m_MetersToPixelsX - s_BallDiameter) * 0.5f);
+            m_VerticalBound = ((h / m_MetersToPixelsY - s_BallDiameter) * 0.5f);
+            m_HorizontalUpperBound = m_HorizontalBound;
+            m_HorizontalLowerBound = - m_HorizontalBound;
+            m_VerticalUpperBound = m_VerticalBound;
+            m_VerticalLowerBound = - m_VerticalBound;
         }
 
         @Override
@@ -476,55 +457,84 @@ public class AccelerometerPlay extends Activity {
              * to with the screen in its native orientation).
              */
 
-            switch (mDisplay.getRotation()) {
+            switch (m_Display.getRotation()) {
                 case Surface.ROTATION_0:
-                    mSensorX = event.values[0];
-                    mSensorY = event.values[1];
+                    m_SensorX = event.values[0];
+                    m_SensorY = event.values[1];
                     break;
                 case Surface.ROTATION_90:
-                    mSensorX = -event.values[1];
-                    mSensorY = event.values[0];
+                    m_SensorX = -event.values[1];
+                    m_SensorY = event.values[0];
                     break;
                 case Surface.ROTATION_180:
-                    mSensorX = -event.values[0];
-                    mSensorY = -event.values[1];
+                    m_SensorX = -event.values[0];
+                    m_SensorY = -event.values[1];
                     break;
                 case Surface.ROTATION_270:
-                    mSensorX = event.values[1];
-                    mSensorY = -event.values[0];
+                    m_SensorX = event.values[1];
+                    m_SensorY = -event.values[0];
                     break;
             }
 
-            mSensorTimeStamp = event.timestamp;
-            mCpuTimeStamp = System.nanoTime();
+            m_SensorTimeStamp = event.timestamp;
+            m_CpuTimeStamp = System.nanoTime();
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
-
+        	
             /*
              * draw the background
              */
 
-            canvas.drawBitmap(mWood, 0, 0, null);
-
+            //canvas.drawBitmap(m_Wood, 0, 0, null);
+            
             /*
              * compute the new position of our object, based on accelerometer
              * data and present time.
-             */
+             */  
+            float height = 0.90f * (m_Height / (float) m_MazeHeight);
+            float width = 0.98f * (m_Width / (float) m_MazeWidth);
+            
+            final int[][] maze = m_Maze.Maze();
+            for(int i = 0; i < m_MazeHeight; i++)
+            {
+        		for (int j = 0; j < m_MazeWidth; j++) 
+        		{
+        			if((maze[i][j] & 1) == 0)
+        			{        				
+        		        canvas.drawLine((j * width), (i * height), ((j + 1) * width), (i * height), m_Maze.Wall());
+        			}
+    			}
+        		
+    			// draw the west edge
+    			for (int j = 0; j < m_MazeWidth; j++)
+    			{
+    				if((maze[i][j] & 8) == 0)
+        			{        				
+        		        canvas.drawLine((j * width), (i * height), (j * width), ((i + 1) * height), m_Maze.Wall());
+        			}
+    			}
+            }
+            
+            //Draws Boundaries N, S, E, W
+            canvas.drawLine(0f, 0f, (width * m_MazeWidth), 0f, m_Maze.Wall());
+            canvas.drawLine(0f, (height * m_MazeHeight), (width * m_MazeWidth), (height * m_MazeHeight), m_Maze.Wall());
+            canvas.drawLine((width * m_MazeWidth), 0f, (width * m_MazeWidth), (height * m_MazeHeight), m_Maze.Wall());
+            canvas.drawLine(0f, 0f, 0f, (height * m_MazeHeight), m_Maze.Wall());
 
-            final ParticleSystem particleSystem = mParticleSystem;
-            final long now = mSensorTimeStamp + (System.nanoTime() - mCpuTimeStamp);
-            final float sx = mSensorX;
-            final float sy = mSensorY;
+            final ParticleSystem particleSystem = m_ParticleSystem;
+            final long now = m_SensorTimeStamp + (System.nanoTime() - m_CpuTimeStamp);
+            final float sx = m_SensorX;
+            final float sy = m_SensorY;
 
             particleSystem.update(sx, sy, now);
 
-            final float xc = mXOrigin;
-            final float yc = mYOrigin;
-            final float xs = mMetersToPixelsX;
-            final float ys = mMetersToPixelsY;
-            final Bitmap bitmap = mBitmap;
+            final float xc = m_XOrigin;
+            final float yc = m_YOrigin;
+            final float xs = m_MetersToPixelsX;
+            final float ys = m_MetersToPixelsY;
+            final Bitmap bitmap = m_Bitmap;
             final int count = particleSystem.getParticleCount();
             for (int i = 0; i < count; i++) {
                 /*
@@ -546,4 +556,5 @@ public class AccelerometerPlay extends Activity {
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
         }
     }
+
 }
