@@ -1,8 +1,65 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:orientation="horizontal"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    tools:context=".AccelerometerPlay"
-    android:background="@drawable/wood" >
+    android:background="@drawable/wood"
+    android:orientation="horizontal"
+    tools:context=".AccelerometerPlay" >
+
+    
+    <!--<team.uno.marblegame.AccelerometerPlay.SimulationView 
+        android:id="@+id/Simulation" 
+        android:layout_width="match_parent"
+    	android:layout_height="match_parent"/>
+    
+    <Button
+        android:id="@+id/btnPlayPause"
+        style="?android:attr/buttonStyleSmall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginLeft="25dp"
+        android:layout_toRightOf="@+id/btnNewGame"
+        android:onClick="btname_Click"
+        android:text="@string/button_start" />
+
+    <Button
+        android:id="@+id/btnNewGame"
+        style="?android:attr/buttonStyleSmall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentBottom="true"
+        android:onClick="btnNewGame_Click"
+        android:text="@string/button_new_game" />
+
+    <TextView
+        android:id="@+id/txtClock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:textSize="24sp"
+        android:text="@string/button_new_game" /> -->
+    
+    <Button
+	    android:id="@+id/btnNew"
+	    android:layout_width="wrap_content"
+	    android:layout_height="wrap_content"
+	    android:layout_centerHorizontal="true"
+	    android:layout_centerVertical="true"
+	    android:padding="5dp"
+	    android:width="150dp"
+	    android:text="@string/button_new_game" />
+
+    <Button
+        android:id="@+id/btnExit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/btnNew"
+	    android:layout_centerHorizontal="true"
+        android:padding="5dp"
+        android:text="@string/button_start"
+        android:width="150dp" />
+
 </RelativeLayout>

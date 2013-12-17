@@ -3,9 +3,15 @@
 
     <string name="app_name">Team Uno</string>
     <string name="action_settings">Settings</string>
+
     <color name="wall_color">#A4C739</color>
+
     <dimen name="wall_thickness">10mm</dimen>
+
     <string name="timing_service_started">Timer Started</string>
     <string name="timer_service_stopped">Timer Stopped</string>
+    <string name="button_new_game">New Game</string>
+    <string name="button_start">Start / Pause</string>
+    <string name="title_activity_start">StartActivity</string>
 
 </resources>
