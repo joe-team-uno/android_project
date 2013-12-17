@@ -2,6 +2,7 @@
 Daniel Moore
 Jed Oesterreich
 
+Our application is a maze with a single ball.
 
 1. the pid, first_child_pid, and next_sibling_pid fields change. the uid and comm don’t change. The pid’s change because there are different processes going on.
 
