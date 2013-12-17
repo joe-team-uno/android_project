@@ -1,0 +1,15 @@
+﻿Joseph Janssen
+Daniel Moore
+Jed Oesterreich
+
+
+1. the pid, first_child_pid, and next_sibling_pid fields change. the uid and comm don’t change. The pid’s change because there are different processes going on.
+
+
+2.
+
+
+3.
+a.) It is a process with core libraries linked in so when you start an application this process gets forked so the libraries can be shared.
+b.) 
+c.) In an embedded system you have limited resources so you don’t want to create copies of multiple libraries that you will not change.
