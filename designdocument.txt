@@ -2,7 +2,16 @@
 Daniel Moore
 Jed Oesterreich
 
-Our application is a maze with a single ball.
+Our application is a maze with a single ball. You click on the application to start it and hit the reset key to reset it.
+
+Building and running modified kernel and test program:
+    The kernel can be built simply by running the 'build-it' script in the Kernel directory. If not using the script, it is important to use an ARM build configuration, as the custom syscall is defined in  /arch/arm/kernel.
+
+    The test program resides in the "TestPgm" directory, and is compiled individually. Cross-compile it with: 'arm-angstrom-linux-gnueabi-gcc -static -o TestPgm TestPgm.c'
+    A pre-compiled executable is provided that will work with the modified kernel.
+
+    Once compiled, boot the kernel either via emulator (recomended, this is how we tested it) or on a physical device. The test program can then be pushed onto the device and ran directly in command line mode.
+
 
 1. the pid, first_child_pid, and next_sibling_pid fields change. the uid and comm don’t change. The pid’s change because there are different processes going on.
 
